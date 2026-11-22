@@ -1,0 +1,8 @@
+# Add one friend per line. Lines starting with # are ignored.
+# birthday: MM-DD, or YYYY-MM-DD if you know the year (adds their age to the message)
+# remind_days_before: blank = 7. Several allowed, e.g. 14;3;1. You're always reminded on the day too.
+# The three rows below are examples - replace them with your friends.
+name,birthday,remind_days_before
+Sam,03-14,
+Alex,1995-07-02,14
+Jordan,02-29,3;1

@@ -1,0 +1,37 @@
+name: Birthday reminders
+
+on:
+  schedule:
+    # Runs daily at 17:00 UTC (9 AM Pacific in winter, 10 AM in summer).
+    # GitHub cron is always UTC, and scheduled runs can be a few minutes late.
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Send a test notification instead of checking birthdays"
+        type: boolean
+        default: false
+  push:
+    paths:
+      - birthdays.csv  # check the file for typos whenever you edit it
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    env:
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      TZ_NAME: America/Los_Angeles  # change to your time zone
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Send test notification
+        if: github.event_name == 'workflow_dispatch' && inputs.test
+        run: python check_birthdays.py --test
+      - name: Validate birthdays.csv (no notification)
+        if: github.event_name == 'push'
+        run: python check_birthdays.py --dry-run
+      - name: Check birthdays
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.test)
+        run: python check_birthdays.py
