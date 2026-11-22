@@ -1,15 +1,17 @@
-"""Daily birthday check: sends a phone push via ntfy.sh for upcoming birthdays.
+"""Daily birthday check: emails you about upcoming birthdays (via Gmail).
 
 Usage:
-    python check_birthdays.py               # check today, send push if needed
+    python check_birthdays.py               # check today, send email if needed
     python check_birthdays.py --dry-run     # print instead of sending
     python check_birthdays.py --date 2026-03-07 --dry-run
-    python check_birthdays.py --test        # send one test push
+    python check_birthdays.py --test        # send one test email
 
 Environment:
-    NTFY_TOPIC   ntfy topic to publish to (required unless --dry-run)
-    NTFY_SERVER  defaults to https://ntfy.sh
-    TZ_NAME      IANA time zone for "today", e.g. America/New_York (default UTC)
+    EMAIL_USER          Gmail address that sends the email (required unless --dry-run)
+    EMAIL_APP_PASSWORD  Gmail App Password for that account (required unless --dry-run)
+    EMAIL_TO            where to send reminders (defaults to EMAIL_USER)
+    SMTP_HOST/SMTP_PORT default to smtp.gmail.com / 465
+    TZ_NAME             IANA time zone for "today", e.g. America/Los_Angeles (default UTC)
 """
 
 from __future__ import annotations
@@ -19,9 +21,10 @@ import calendar
 import csv
 import os
 import sys
-import urllib.request
+import smtplib
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from email.message import EmailMessage
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -115,20 +118,29 @@ def reminders_for(friends: list[Friend], today: date) -> list[str]:
     return [m for _, m in sorted(messages, key=lambda x: x[0])]
 
 
-def send_push(message: str, title: str = "Birthday reminder") -> None:
-    topic = os.environ.get("NTFY_TOPIC", "").strip()
-    if not topic:
-        raise SystemExit("NTFY_TOPIC is not set; can't send notification.")
-    server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
-    req = urllib.request.Request(
-        f"{server}/{topic}",
-        data=message.encode("utf-8"),
-        headers={"Title": title, "Tags": "birthday", "Priority": "default"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        if resp.status >= 300:
-            raise RuntimeError(f"ntfy returned HTTP {resp.status}")
+def send_email(subject: str, body: str) -> None:
+    user = os.environ.get("EMAIL_USER", "").strip()
+    password = os.environ.get("EMAIL_APP_PASSWORD", "").replace(" ", "").strip()
+    if not user or not password:
+        raise SystemExit("EMAIL_USER and EMAIL_APP_PASSWORD must be set to send email.")
+    to = os.environ.get("EMAIL_TO", "").strip() or user
+    host = os.environ.get("SMTP_HOST", "").strip() or "smtp.gmail.com"
+    port = int(os.environ.get("SMTP_PORT", "").strip() or 465)
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"Birthday Reminder <{user}>"
+    msg["To"] = to
+    msg.set_content(body)
+    with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
+        smtp.login(user, password)
+        smtp.send_message(msg)
+
+
+def subject_for(messages: list[str]) -> str:
+    if len(messages) == 1:
+        return messages[0]
+    return f"🎂 {len(messages)} birthday reminders"
 
 
 def today_in_tz() -> date:
@@ -140,18 +152,18 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dry-run", action="store_true", help="print instead of sending")
     p.add_argument("--date", help="pretend today is YYYY-MM-DD")
-    p.add_argument("--test", action="store_true", help="send a single test notification")
+    p.add_argument("--test", action="store_true", help="send a single test email")
     p.add_argument("--file", type=Path, default=CSV_PATH, help="path to birthdays.csv")
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")  # emoji-safe output on Windows consoles
 
     if args.test:
-        msg = "✅ Test from your birthday reminder. Notifications are working!"
+        msg = "✅ Test from your birthday reminder. Emails are working!"
         if args.dry_run:
             print(f"(dry run) {msg}")
         else:
-            send_push(msg, title="Birthday reminder test")
-            print("Test notification sent.")
+            send_email("Birthday reminder test", msg)
+            print("Test email sent.")
         return 0
 
     today = date.fromisoformat(args.date) if args.date else today_in_tz()
@@ -163,8 +175,9 @@ def main(argv: list[str] | None = None) -> int:
         body = "\n".join(messages)
         print(body)
         if not args.dry_run:
-            send_push(body)
-            print("Notification sent.")
+            footer = "\n\nTo add or change friends, edit birthdays.csv in your bday-reminders repo."
+            send_email(subject_for(messages), body + footer)
+            print("Email sent.")
     else:
         print("No reminders today.")
 

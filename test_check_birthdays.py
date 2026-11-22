@@ -1,9 +1,13 @@
+import os
 import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
-from check_birthdays import Friend, load_friends, next_birthday, parse_lead_days, reminders_for
+from check_birthdays import (
+    Friend, load_friends, next_birthday, parse_lead_days, reminders_for, send_email, subject_for,
+)
 
 
 def f(name, month, day, year=None, lead=(7,)):
@@ -85,6 +89,30 @@ class LoadTests(unittest.TestCase):
         self.assertEqual(friends[1].year, 1995)
         self.assertEqual(friends[2].lead_days, (3, 1))
         self.assertEqual(len(errors), 2)
+
+
+class EmailTests(unittest.TestCase):
+    def test_subject(self):
+        self.assertEqual(subject_for(["Sam has a birthday tomorrow"]), "Sam has a birthday tomorrow")
+        self.assertEqual(subject_for(["a", "b"]), "🎂 2 birthday reminders")
+
+    def test_send_email_uses_gmail_and_defaults_to_self(self):
+        env = {"EMAIL_USER": "me@gmail.com", "EMAIL_APP_PASSWORD": "abcd efgh ijkl mnop"}
+        with mock.patch.dict(os.environ, env, clear=False), \
+                mock.patch.dict(os.environ, {"EMAIL_TO": ""}), \
+                mock.patch("smtplib.SMTP_SSL") as smtp_cls:
+            send_email("Subj", "Body")
+        smtp_cls.assert_called_once_with("smtp.gmail.com", 465, timeout=30)
+        smtp = smtp_cls.return_value.__enter__.return_value
+        smtp.login.assert_called_once_with("me@gmail.com", "abcdefghijklmnop")
+        sent = smtp.send_message.call_args[0][0]
+        self.assertEqual(sent["To"], "me@gmail.com")
+        self.assertEqual(sent["Subject"], "Subj")
+
+    def test_missing_credentials(self):
+        with mock.patch.dict(os.environ, {"EMAIL_USER": "", "EMAIL_APP_PASSWORD": ""}):
+            with self.assertRaises(SystemExit):
+                send_email("s", "b")
 
 
 if __name__ == "__main__":

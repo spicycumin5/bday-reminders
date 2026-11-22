@@ -1,6 +1,6 @@
 # Birthday Reminder
 
-Sends a push notification to your phone (via the free [ntfy](https://ntfy.sh) app) when a friend's birthday is coming up. A GitHub Action runs it once a day, so it works even when your PC is off.
+Emails you (through Gmail) when a friend's birthday is coming up. A GitHub Action runs it once a day, so it works even when your PC is off.
 
 ## Adding friends
 Edit `birthdays.csv`, either on github.com (open the file, click the pencil icon, then **Commit changes**) or locally and push.
@@ -22,9 +22,15 @@ Lines starting with `#` are ignored. Feb 29 birthdays are celebrated on Feb 28 i
 Each time you change the file, GitHub checks it for typos. If there's a problem, the run fails and GitHub emails you.
 
 ## One-time setup
-1. Install **ntfy** on your phone (App Store / Google Play) and subscribe to your private topic name. Treat it like a password: anyone who knows it can read your reminders.
-2. In the GitHub repo: **Settings → Secrets and variables → Actions → New repository secret**, name it `NTFY_TOPIC`, and paste the same topic name as the value.
-3. **Actions → Birthday reminders → Run workflow**, tick **test**, and run it. Your phone should buzz.
+1. Turn on **2-Step Verification** for your Google account (myaccount.google.com → Security).
+2. Create an **App Password** at https://myaccount.google.com/apppasswords (any name, e.g. "bday reminders"). Google shows a 16-letter password once, so copy it.
+3. In the GitHub repo: **Settings → Secrets and variables → Actions → New repository secret**. Add:
+   - `EMAIL_USER`: your Gmail address
+   - `EMAIL_APP_PASSWORD`: the 16-letter App Password (spaces are fine)
+   - `EMAIL_TO` *(optional)*: a different address to send reminders to. If you skip it, they go to `EMAIL_USER`.
+4. **Actions → Birthday reminders → Run workflow**, tick **test**, and run it. You should get a test email within a minute (check spam the first time).
+
+Secrets are hidden even though the repo is public. To stop the emails, delete the App Password in your Google account.
 
 ## Settings
 - **Time zone:** `TZ_NAME` in `.github/workflows/reminders.yml` (e.g. `America/Los_Angeles`, `Europe/London`).

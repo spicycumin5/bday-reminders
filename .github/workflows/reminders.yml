@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       test:
-        description: "Send a test notification instead of checking birthdays"
+        description: "Send a test email instead of checking birthdays"
         type: boolean
         default: false
   push:
@@ -19,17 +19,19 @@ jobs:
   remind:
     runs-on: ubuntu-latest
     env:
-      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}  # optional; defaults to EMAIL_USER
       TZ_NAME: America/Los_Angeles  # change to your time zone
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Send test notification
+      - name: Send test email
         if: github.event_name == 'workflow_dispatch' && inputs.test
         run: python check_birthdays.py --test
-      - name: Validate birthdays.csv (no notification)
+      - name: Validate birthdays.csv (no email)
         if: github.event_name == 'push'
         run: python check_birthdays.py --dry-run
       - name: Check birthdays
